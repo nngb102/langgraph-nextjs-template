@@ -1,4 +1,7 @@
 import type { Message, ToolMessage, AIMessage } from "@langchain/langgraph-sdk"
+import { format } from "date-fns"
+import { Copy, Check } from "lucide-react"
+import { useState } from "react"
 
 interface MessageItemProps {
     message: Message
@@ -38,6 +41,18 @@ const AIIcon = () => (
         <path d="M12 2a10 10 0 1 1-10 10h10V2z" />
         <circle cx="12" cy="12" r="4" />
     </svg>
+)
+
+const UserAvatar = () => (
+    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+        <span className="text-blue-600 font-medium">U</span>
+    </div>
+)
+
+const AIAvatar = () => (
+    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+        <span className="text-purple-600 font-medium">AI</span>
+    </div>
 )
 
 const StatusIcon = ({ status }: { status?: "error" | "success" }) => {
@@ -83,16 +98,24 @@ const StatusIcon = ({ status }: { status?: "error" | "success" }) => {
 }
 
 export function MessageItem({ message, isGrouped = false }: MessageItemProps) {
+    const [isCopied, setIsCopied] = useState(false)
+
+    const handleCopy = async () => {
+        await navigator.clipboard.writeText(message.content as string)
+        setIsCopied(true)
+        setTimeout(() => setIsCopied(false), 2000)
+    }
+
     const getMessageStyle = () => {
         switch (message.type) {
             case "human":
                 return "bg-blue-600 text-white shadow-md"
             case "tool":
                 return `bg-gray-50 border-2 shadow-sm ${(message as ToolMessage).status === "error"
-                        ? "border-red-400"
-                        : (message as ToolMessage).status === "success"
-                            ? "border-green-400"
-                            : "border-gray-400"
+                    ? "border-red-400"
+                    : (message as ToolMessage).status === "success"
+                        ? "border-green-400"
+                        : "border-gray-400"
                     }`
             case "ai":
                 const aiMessage = message as AIMessage
@@ -106,36 +129,14 @@ export function MessageItem({ message, isGrouped = false }: MessageItemProps) {
     }
 
     const renderAIMessageHeader = (aiMessage: AIMessage) => {
-        const hasToolCalls = aiMessage.tool_calls && aiMessage.tool_calls.length > 0
         const hasInvalidToolCalls = aiMessage.invalid_tool_calls && aiMessage.invalid_tool_calls.length > 0
-        const hasUsageMetadata = aiMessage.usage_metadata
 
-        if (!hasToolCalls && !hasInvalidToolCalls && !hasUsageMetadata) return null
+        if (!hasInvalidToolCalls) return null
 
         return (
             <div className="flex flex-col gap-1 mb-2">
                 {hasInvalidToolCalls && (
                     <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Invalid Tool Calls</span>
-                )}
-                {hasUsageMetadata && aiMessage.usage_metadata && (
-                    <div className="flex gap-2 items-center text-xs text-gray-500">
-                        <span>Tokens: {aiMessage.usage_metadata.total_tokens}</span>
-                        <span>•</span>
-                        <span>Input: {aiMessage.usage_metadata.input_tokens}</span>
-                        <span>•</span>
-                        <span>Output: {aiMessage.usage_metadata.output_tokens}</span>
-                    </div>
-                )}
-                {hasToolCalls && aiMessage.tool_calls && (
-                    <div className="flex flex-col gap-1 mt-1">
-                        <span className="text-xs font-medium text-gray-600">Tool Calls:</span>
-                        {aiMessage.tool_calls.map((call, index) => (
-                            <div key={call.id || index} className="flex items-center gap-2 text-xs text-gray-600">
-                                <ToolIcon />
-                                <span>{call.name}</span>
-                            </div>
-                        ))}
-                    </div>
                 )}
                 {hasInvalidToolCalls && aiMessage.invalid_tool_calls && (
                     <div className="flex flex-col gap-1 mt-1">
@@ -153,47 +154,63 @@ export function MessageItem({ message, isGrouped = false }: MessageItemProps) {
         )
     }
 
-    // Apply different styling for grouped messages
-    const containerClasses = `${isGrouped ? "mt-1" : "flex " + (message.type === "human" ? "justify-end" : "justify-start")}`
-
-    // Add visual indicator for grouped messages
-    const messageClasses = `${isGrouped ? "border-t border-gray-200 pt-2" : ""} max-w-[80%] rounded-lg p-4 ${getMessageStyle()}`
-
     return (
-        <div className={containerClasses}>
-            <div className={messageClasses}>
-                {message.type === "tool" && (
-                    <div className="flex flex-col gap-1 mb-2">
-                        <div className="flex items-center gap-2 text-gray-600">
-                            <ToolIcon />
-                            <span className="font-medium">{(message as ToolMessage).name || "Tool Result"}</span>
-                            <StatusIcon status={(message as ToolMessage).status} />
-                        </div>
-                        <div className="flex gap-2 items-center">
-                            {(message as ToolMessage).status && (
-                                <span
-                                    className={`text-xs px-2 py-0.5 rounded-full ${(message as ToolMessage).status === "error"
-                                            ? "bg-red-100 text-red-700"
-                                            : "bg-green-100 text-green-700"
-                                        }`}
-                                >
-                                    {(message as ToolMessage).status}
-                                </span>
-                            )}
-                        </div>
+        <div className={`flex ${message.type === "human" ? "justify-end" : "justify-start"}`}>
+            <div className="flex items-start gap-3 max-w-[85%]">
+                {message.type === "human" ? null : <AIAvatar />}
+                <div className="flex flex-col">
+                    <div className={`rounded-2xl p-4 ${getMessageStyle()}`}>
+                        {message.type === "tool" && (
+                            <div className="flex flex-col gap-1 mb-2">
+                                <div className="flex items-center gap-2 text-gray-600">
+                                    <ToolIcon />
+                                    <span className="font-medium">{(message as ToolMessage).name || "Tool Result"}</span>
+                                    <StatusIcon status={(message as ToolMessage).status} />
+                                </div>
+                                <div className="flex gap-2 items-center">
+                                    {(message as ToolMessage).status && (
+                                        <span
+                                            className={`text-xs px-2 py-0.5 rounded-full ${(message as ToolMessage).status === "error"
+                                                ? "bg-red-100 text-red-700"
+                                                : "bg-green-100 text-green-700"
+                                                }`}
+                                        >
+                                            {(message as ToolMessage).status}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {message.type === "ai" && renderAIMessageHeader(message as AIMessage)}
+                        <p
+                            className={`whitespace-pre-wrap ${message.type === "tool"
+                                ? `text-sm font-mono ${(message as ToolMessage).status === "error" ? "text-red-700" : "text-gray-700"}`
+                                : message.type === "ai" && (message as AIMessage).invalid_tool_calls?.length
+                                    ? "text-red-600"
+                                    : ""
+                                }`}
+                        >
+                            {message.content as string}
+                        </p>
                     </div>
-                )}
-                {message.type === "ai" && renderAIMessageHeader(message as AIMessage)}
-                <p
-                    className={`whitespace-pre-wrap ${message.type === "tool"
-                            ? `text-sm font-mono ${(message as ToolMessage).status === "error" ? "text-red-700" : "text-gray-700"}`
-                            : message.type === "ai" && (message as AIMessage).invalid_tool_calls?.length
-                                ? "text-red-600"
-                                : ""
-                        }`}
-                >
-                    {message.content as string}
-                </p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-xs text-gray-500">
+                            {format(new Date(), "HH:mm")}
+                        </span>
+                        <button
+                            onClick={handleCopy}
+                            className="p-1 hover:bg-gray-100 rounded transition-colors"
+                            title="Copy message"
+                        >
+                            {isCopied ? (
+                                <Check className="w-4 h-4 text-green-500" />
+                            ) : (
+                                <Copy className="w-4 h-4 text-gray-500" />
+                            )}
+                        </button>
+                    </div>
+                </div>
+                {message.type === "human" ? <UserAvatar /> : null}
             </div>
         </div>
     )
