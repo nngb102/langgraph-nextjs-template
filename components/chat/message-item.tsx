@@ -1,7 +1,7 @@
 import type { Message, ToolMessage, AIMessage } from "@langchain/langgraph-sdk"
 import { format } from "date-fns"
 import { Copy, Check } from "lucide-react"
-import { useState } from "react"
+import { useState, memo } from "react"
 
 interface MessageItemProps {
     message: Message
@@ -97,7 +97,7 @@ const StatusIcon = ({ status }: { status?: "error" | "success" }) => {
     )
 }
 
-export function MessageItem({ message, isGrouped = false }: MessageItemProps) {
+export const MessageItem = memo(function MessageItem({ message, isGrouped = false }: MessageItemProps) {
     const [isCopied, setIsCopied] = useState(false)
 
     const handleCopy = async () => {
@@ -214,4 +214,6 @@ export function MessageItem({ message, isGrouped = false }: MessageItemProps) {
             </div>
         </div>
     )
-}
+})
+
+MessageItem.displayName = "MessageItem";
