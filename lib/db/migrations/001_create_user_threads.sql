@@ -1,0 +1,9 @@
+-- Create user_threads table
+CREATE TABLE IF NOT EXISTS user_threads (
+    id SERIAL PRIMARY KEY,
+    thread_id TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_accessed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_deleted BOOLEAN DEFAULT FALSE
+); 

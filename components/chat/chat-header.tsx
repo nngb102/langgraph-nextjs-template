@@ -1,6 +1,13 @@
+interface Thread {
+    thread_id: string;
+    title: string;
+    created_at: string;
+    last_accessed_at: string;
+}
+
 interface ChatHeaderProps {
     threadId: string | null;
-    threadHistory: string[];
+    threadHistory: Thread[];
     onThreadSelect: (threadId: string | null) => void;
     onNewThread: () => void;
     onDeleteThread: (threadId: string) => void;
@@ -18,6 +25,9 @@ export function ChatHeader({
 }: ChatHeaderProps) {
     const [isThreadsOpen, setIsThreadsOpen] = useState(false)
     const threadsRef = useRef<HTMLDivElement>(null)
+
+    // Filter out invalid threads
+    const validThreads = threadHistory.filter(thread => thread && thread.thread_id);
 
     // Handle click outside for dropdown
     useEffect(() => {
@@ -54,13 +64,15 @@ export function ChatHeader({
                     <h1 className="text-xl font-bold text-gray-900">Chat Assistant</h1>
                     {threadId && (
                         <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">Thread ID:</span>
-                            <span className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">{threadId}</span>
+                            <span className="text-sm text-gray-600">Thread:</span>
+                            <span className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">
+                                {validThreads.find(t => t.thread_id === threadId)?.title || threadId}
+                            </span>
                         </div>
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    {threadHistory.length > 0 && (
+                    {validThreads.length > 0 && (
                         <div className="relative" ref={threadsRef}>
                             <button
                                 onClick={() => setIsThreadsOpen(!isThreadsOpen)}
@@ -71,20 +83,25 @@ export function ChatHeader({
                             </button>
                             {isThreadsOpen && (
                                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10 animate-in fade-in slide-in-from-top-2">
-                                    {threadHistory.map((id) => (
+                                    {validThreads.map((thread) => (
                                         <div
-                                            key={id}
+                                            key={thread.thread_id}
                                             className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 cursor-pointer"
                                             onClick={() => {
-                                                onThreadSelect(id)
+                                                onThreadSelect(thread.thread_id)
                                                 setIsThreadsOpen(false)
                                             }}
                                         >
-                                            <span className="text-sm text-gray-700">Thread {threadHistory.indexOf(id) + 1}</span>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-medium text-gray-700">{thread.thread_id}</span>
+                                                <span className="text-xs text-gray-500">
+                                                    {new Date(thread.last_accessed_at).toLocaleDateString()}
+                                                </span>
+                                            </div>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation()
-                                                    onDeleteThread(id)
+                                                    onDeleteThread(thread.thread_id)
                                                 }}
                                                 className="p-1 hover:bg-red-50 rounded-full transition-colors"
                                             >
