@@ -1,6 +1,6 @@
 import type { Message, ToolMessage, AIMessage } from "@langchain/langgraph-sdk"
 import { format } from "date-fns"
-import { Copy, Check } from "lucide-react"
+import { Copy, Check, ChevronDown, ChevronUp } from "lucide-react"
 import { useState, memo } from "react"
 
 interface MessageItemProps {
@@ -99,6 +99,7 @@ const StatusIcon = ({ status }: { status?: "error" | "success" }) => {
 
 export const MessageItem = memo(function MessageItem({ message, isGrouped = false }: MessageItemProps) {
     const [isCopied, setIsCopied] = useState(false)
+    const [isToolExpanded, setIsToolExpanded] = useState(false)
 
     const handleCopy = async () => {
         await navigator.clipboard.writeText(message.content as string)
@@ -156,16 +157,45 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped = fals
 
     return (
         <div className={`flex ${message.type === "human" ? "justify-end" : "justify-start"}`}>
-            <div className="flex items-start gap-3 max-w-[85%]">
-                {message.type === "human" ? null : <AIAvatar />}
+            <div className={`flex items-start gap-3 max-w-[85%] ${message.type !== 'human' ? 'ml-0' : ''}`}>
                 <div className="flex flex-col">
-                    <div className={`rounded-2xl p-4 ${getMessageStyle()}`}>
-                        {message.type === "tool" && (
-                            <div className="flex flex-col gap-1 mb-2">
-                                <div className="flex items-center gap-2 text-gray-600">
+                    {message.type === 'human' ? (
+                        <div className={`rounded-2xl p-4 ${getMessageStyle()}`}>
+                            <p className="whitespace-pre-wrap">
+                                {message.content as string}
+                            </p>
+                        </div>
+                    ) : message.type === 'ai' ? (
+                        <>
+                            {renderAIMessageHeader(message as AIMessage)}
+                            <p
+                                className={`whitespace-pre-wrap ${(message as AIMessage).invalid_tool_calls?.length
+                                    ? "text-red-600"
+                                    : ""
+                                    }`}
+                            >
+                                {message.content as string}
+                            </p>
+                        </>
+                    ) : message.type === 'tool' ? (
+                        <div className={`rounded-lg p-3 bg-gray-50 border-2 shadow-sm ${(message as ToolMessage).status === "error"
+                            ? "border-red-400"
+                            : (message as ToolMessage).status === "success"
+                                ? "border-green-400"
+                                : "border-gray-400"
+                            }`}>
+                            <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2 text-gray-600 mb-1">
                                     <ToolIcon />
                                     <span className="font-medium">{(message as ToolMessage).name || "Tool Result"}</span>
                                     <StatusIcon status={(message as ToolMessage).status} />
+                                    <button
+                                        onClick={() => setIsToolExpanded(!isToolExpanded)}
+                                        className="ml-auto p-1 rounded hover:bg-gray-200 transition-colors"
+                                        title={isToolExpanded ? "Collapse" : "Expand"}
+                                    >
+                                        {isToolExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                    </button>
                                 </div>
                                 <div className="flex gap-2 items-center">
                                     {(message as ToolMessage).status && (
@@ -180,34 +210,34 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped = fals
                                     )}
                                 </div>
                             </div>
-                        )}
-                        {message.type === "ai" && renderAIMessageHeader(message as AIMessage)}
-                        <p
-                            className={`whitespace-pre-wrap ${message.type === "tool"
-                                ? `text-sm font-mono ${(message as ToolMessage).status === "error" ? "text-red-700" : "text-gray-700"}`
-                                : message.type === "ai" && (message as AIMessage).invalid_tool_calls?.length
-                                    ? "text-red-600"
-                                    : ""
-                                }`}
-                        >
-                            {message.content as string}
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1.5">
-                        <span className="text-xs text-gray-500">
-                            {format(new Date(), "HH:mm")}
-                        </span>
-                        <button
-                            onClick={handleCopy}
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                            title="Copy message"
-                        >
-                            {isCopied ? (
-                                <Check className="w-4 h-4 text-green-500" />
-                            ) : (
-                                <Copy className="w-4 h-4 text-gray-500" />
+                            {isToolExpanded && (
+                                <div className="mt-2 pt-2 border-t border-gray-200">
+                                    <p
+                                        className={`whitespace-pre-wrap text-sm font-mono ${(message as ToolMessage).status === "error" ? "text-red-700" : "text-gray-700"
+                                            }`}
+                                    >
+                                        {message.content as string}
+                                    </p>
+                                </div>
                             )}
-                        </button>
+                        </div>
+                    ) : (
+                        <p className="whitespace-pre-wrap">{message.content as string}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1.5">
+                        {message.type === 'human' && (
+                            <button
+                                onClick={handleCopy}
+                                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                title="Copy message"
+                            >
+                                {isCopied ? (
+                                    <Check className="w-4 h-4 text-green-500" />
+                                ) : (
+                                    <Copy className="w-4 h-4 text-gray-500" />
+                                )}
+                            </button>
+                        )}
                     </div>
                 </div>
                 {message.type === "human" ? <UserAvatar /> : null}
