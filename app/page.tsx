@@ -197,8 +197,13 @@ export default function Chat() {
             </div>
           ) : (
             <div className="space-y-6">
-              {displayMessages.map((message) => (
-                <MessageItem key={message.id} message={message} />
+              {displayMessages.map((message, index) => (
+                <MessageItem
+                  key={message.id || `msg-${index}`}
+                  message={message}
+                  allMessages={displayMessages}
+                  messageIndex={index}
+                />
               ))}
               <div ref={messagesEndRef} className="h-0" />
             </div>

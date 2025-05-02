@@ -1,11 +1,17 @@
 import type { Message, ToolMessage, AIMessage } from "@langchain/langgraph-sdk"
 import { format } from "date-fns"
-import { Copy, Check, ChevronDown, ChevronUp } from "lucide-react"
-import { useState, memo } from "react"
+import { Copy, Check, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
+import { useState, memo, useMemo, useCallback } from "react"
+
+// Type guards for better type safety
+const isToolMessage = (msg: Message): msg is ToolMessage => msg.type === 'tool';
+const isAIMessage = (msg: Message): msg is AIMessage => msg.type === 'ai';
 
 interface MessageItemProps {
     message: Message
     isGrouped?: boolean
+    allMessages: Message[]
+    messageIndex: number
 }
 
 const ToolIcon = () => (
@@ -97,15 +103,152 @@ const StatusIcon = ({ status }: { status?: "error" | "success" }) => {
     )
 }
 
-export const MessageItem = memo(function MessageItem({ message, isGrouped = false }: MessageItemProps) {
-    const [isCopied, setIsCopied] = useState(false)
-    const [isToolExpanded, setIsToolExpanded] = useState(false)
+// Spinner component (optional, can use emoji)
+const InlineSpinner = () => (
+    <Loader2 className="w-4 h-4 inline animate-spin text-gray-500 mr-1" />
+);
 
-    const handleCopy = async () => {
+// --- Helper Function to Render Tool Content in both loading and completed states ---
+const RenderToolContent = ({
+    toolCall,
+    toolResult,
+    isExpanded,
+    onToggleExpand
+}: {
+    toolCall: { name: string; id?: string; },
+    toolResult: ToolMessage | null,
+    isExpanded: boolean,
+    onToggleExpand: () => void
+}) => {
+    const isLoading = !toolResult;
+
+    return (
+        <>
+            {/* Tool Header Row - consistent for both loading and completed states */}
+            <div className="flex items-center gap-2 text-gray-600 mb-1">
+                <ToolIcon />
+                <span className="font-medium">{(toolResult?.name || toolCall.name || "Tool")}</span>
+
+                {/* Show loading spinner or status icon */}
+                {isLoading ? (
+                    <InlineSpinner />
+                ) : (
+                    <StatusIcon status={toolResult.status} />
+                )}
+
+                {/* Only show expand/collapse button for completed tools with content */}
+                {!isLoading && (
+                    <button
+                        onClick={onToggleExpand}
+                        className="ml-auto p-1 rounded hover:bg-gray-200 transition-colors"
+                        title={isExpanded ? "Collapse" : "Expand"}
+                    >
+                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+                )}
+            </div>
+
+            {/* Status Badge Row - for both states */}
+            <div className="flex gap-2 items-center">
+                {isLoading ? (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                        Executing
+                    </span>
+                ) : toolResult.status && (
+                    <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${toolResult.status === "error"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-green-100 text-green-700"
+                            }`}
+                    >
+                        {toolResult.status}
+                    </span>
+                )}
+            </div>
+
+            {/* Tool Content - only for completed tools when expanded */}
+            {!isLoading && isExpanded && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                    <p
+                        className={`whitespace-pre-wrap text-sm font-mono ${toolResult.status === "error" ? "text-red-700" : "text-gray-700"
+                            }`}
+                    >
+                        {toolResult.content as string}
+                    </p>
+                </div>
+            )}
+        </>
+    );
+};
+
+// Style helper function for tool box appearance based on tool state
+const getToolBoxStyle = (toolResult: ToolMessage | null | undefined) => {
+    const baseClasses = "rounded-lg p-3 border-2 shadow-sm ";
+
+    if (!toolResult) {
+        return baseClasses + "bg-blue-50 border-blue-300"; // Loading state - use blue tint
+    }
+
+    if (toolResult.status === "error") {
+        return baseClasses + "bg-red-50 border-red-400";
+    }
+
+    if (toolResult.status === "success") {
+        return baseClasses + "bg-green-50 border-green-400";
+    }
+
+    return baseClasses + "bg-gray-50 border-gray-400"; // Default state
+};
+
+// Core component that renders message items
+export const MessageItem = memo(function MessageItem({
+    message,
+    isGrouped = false,
+    allMessages,
+    messageIndex
+}: MessageItemProps) {
+    const [isCopied, setIsCopied] = useState(false)
+    const [toolExpansionState, setToolExpansionState] = useState<Record<string, boolean>>({});
+
+    const handleCopy = useCallback(async () => {
         await navigator.clipboard.writeText(message.content as string)
         setIsCopied(true)
         setTimeout(() => setIsCopied(false), 2000)
-    }
+    }, [message.content]);
+
+    const toggleToolExpansion = useCallback((toolCallId: string) => {
+        setToolExpansionState(prev => ({
+            ...prev,
+            [toolCallId]: !prev[toolCallId]
+        }));
+    }, []);
+
+    const toolResultsMap = useMemo(() => {
+        const results = new Map<string, ToolMessage | null>();
+        if (!isAIMessage(message) || !message.tool_calls) {
+            return results;
+        }
+
+        const currentToolCallIds = new Set(message.tool_calls.map(tc => tc.id).filter(id => id != null) as string[]);
+        const subsequentMessages = allMessages.slice(messageIndex + 1);
+
+        for (const toolCallId of currentToolCallIds) {
+            results.set(toolCallId, null);
+        }
+
+        for (const msg of subsequentMessages) {
+            if (isToolMessage(msg) && msg.tool_call_id && currentToolCallIds.has(msg.tool_call_id)) {
+                if (!results.get(msg.tool_call_id)) {
+                    results.set(msg.tool_call_id, msg);
+                }
+            }
+
+            if (Array.from(results.values()).every(Boolean) || isAIMessage(msg)) {
+                break;
+            }
+        }
+        return results;
+    }, [allMessages, messageIndex, message]);
 
     const getMessageStyle = () => {
         switch (message.type) {
@@ -155,10 +298,20 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped = fals
         )
     }
 
+    if (isToolMessage(message) && messageIndex > 0) {
+        const prevMessage = allMessages[messageIndex - 1];
+        if (isAIMessage(prevMessage) && prevMessage.tool_calls) {
+            const wasCalledById = prevMessage.tool_calls.some(tc => tc.id === message.tool_call_id);
+            if (wasCalledById) {
+                return null;
+            }
+        }
+    }
+
     return (
         <div className={`flex ${message.type === "human" ? "justify-end" : "justify-start"}`}>
             <div className={`flex items-start gap-3 max-w-[85%] ${message.type !== 'human' ? 'ml-0' : ''}`}>
-                <div className="flex flex-col">
+                <div className="flex flex-col w-full">
                     {message.type === 'human' ? (
                         <div className={`rounded-2xl p-4 ${getMessageStyle()}`}>
                             <p className="whitespace-pre-wrap">
@@ -168,59 +321,53 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped = fals
                     ) : message.type === 'ai' ? (
                         <>
                             {renderAIMessageHeader(message as AIMessage)}
-                            <p
-                                className={`whitespace-pre-wrap ${(message as AIMessage).invalid_tool_calls?.length
-                                    ? "text-red-600"
-                                    : ""
-                                    }`}
-                            >
-                                {message.content as string}
-                            </p>
-                        </>
-                    ) : message.type === 'tool' ? (
-                        <div className={`rounded-lg p-3 bg-gray-50 border-2 shadow-sm ${(message as ToolMessage).status === "error"
-                            ? "border-red-400"
-                            : (message as ToolMessage).status === "success"
-                                ? "border-green-400"
-                                : "border-gray-400"
-                            }`}>
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2 text-gray-600 mb-1">
-                                    <ToolIcon />
-                                    <span className="font-medium">{(message as ToolMessage).name || "Tool Result"}</span>
-                                    <StatusIcon status={(message as ToolMessage).status} />
-                                    <button
-                                        onClick={() => setIsToolExpanded(!isToolExpanded)}
-                                        className="ml-auto p-1 rounded hover:bg-gray-200 transition-colors"
-                                        title={isToolExpanded ? "Collapse" : "Expand"}
-                                    >
-                                        {isToolExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                    </button>
-                                </div>
-                                <div className="flex gap-2 items-center">
-                                    {(message as ToolMessage).status && (
-                                        <span
-                                            className={`text-xs px-2 py-0.5 rounded-full ${(message as ToolMessage).status === "error"
-                                                ? "bg-red-100 text-red-700"
-                                                : "bg-green-100 text-green-700"
-                                                }`}
-                                        >
-                                            {(message as ToolMessage).status}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                            {isToolExpanded && (
-                                <div className="mt-2 pt-2 border-t border-gray-200">
-                                    <p
-                                        className={`whitespace-pre-wrap text-sm font-mono ${(message as ToolMessage).status === "error" ? "text-red-700" : "text-gray-700"
-                                            }`}
-                                    >
-                                        {message.content as string}
-                                    </p>
+                            {typeof message.content === 'string' && message.content.trim() !== '' && (
+                                <p className={`whitespace-pre-wrap mb-2 ${(message as AIMessage).invalid_tool_calls?.length ? "text-red-600" : ""}`}>
+                                    {message.content}
+                                </p>
+                            )}
+                            {message.tool_calls && message.tool_calls.length > 0 && (
+                                <div className="mt-2 space-y-2">
+                                    {message.tool_calls.map((toolCall) => {
+                                        const toolCallId = toolCall.id;
+                                        if (!toolCallId) return null;
+
+                                        const toolResult = toolResultsMap.get(toolCallId);
+                                        const isExpanded = toolExpansionState[toolCallId] ?? false;
+
+                                        return (
+                                            <div
+                                                key={toolCallId}
+                                                className={getToolBoxStyle(toolResult)}
+                                            >
+                                                <RenderToolContent
+                                                    toolCall={toolCall}
+                                                    toolResult={toolResult as ToolMessage | null}
+                                                    isExpanded={isExpanded}
+                                                    onToggleExpand={() => toggleToolExpansion(toolCallId)}
+                                                />
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
-                        </div>
+                        </>
+                    ) : isToolMessage(message) ? (
+                        (() => {
+                            const toolId = message.tool_call_id ?? message.id ?? 'fallback-id';
+                            const isExpanded = toolExpansionState[toolId] ?? false;
+
+                            return (
+                                <div className={getToolBoxStyle(message as ToolMessage)}>
+                                    <RenderToolContent
+                                        toolCall={{ name: message.name || "Tool Result", id: toolId }}
+                                        toolResult={message as ToolMessage}
+                                        isExpanded={isExpanded}
+                                        onToggleExpand={() => toggleToolExpansion(toolId)}
+                                    />
+                                </div>
+                            );
+                        })()
                     ) : (
                         <p className="whitespace-pre-wrap">{message.content as string}</p>
                     )}
@@ -231,11 +378,7 @@ export const MessageItem = memo(function MessageItem({ message, isGrouped = fals
                                 className="p-1 hover:bg-gray-100 rounded transition-colors"
                                 title="Copy message"
                             >
-                                {isCopied ? (
-                                    <Check className="w-4 h-4 text-green-500" />
-                                ) : (
-                                    <Copy className="w-4 h-4 text-gray-500" />
-                                )}
+                                {isCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-gray-500" />}
                             </button>
                         )}
                     </div>
