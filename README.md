@@ -3,7 +3,11 @@
 A starter template for building chat applications using LangGraph and Next.js. This template provides a foundation for creating AI-powered chat experiences with streaming capabilities and modern UI components.
  
 
-https://github.com/user-attachments/assets/50bdc2f2-f437-408e-ac55-a143ac32b00e
+
+https://github.com/user-attachments/assets/63442380-37a3-402a-9dca-b2dc074fd9b4
+
+
+
 
 
 
