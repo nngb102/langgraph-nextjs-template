@@ -1,0 +1,23 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+Đây là cấu trúc chính của dự án:
+
+*   `app/`: Thư mục chứa các route chính của ứng dụng Next.js (sử dụng App Router).
+*   `components/`: Chứa các thành phần UI tái sử dụng.
+*   `hooks/`: Chứa các custom React Hooks.
+*   `lib/`: Có thể chứa các hàm tiện ích, cấu hình, hoặc logic chung.
+*   `node_modules/`: Chứa các dependencies của dự án được cài đặt qua npm/pnpm/yarn.
+*   `public/`: Chứa các tệp tĩnh (static assets) như hình ảnh, fonts.
+*   `styles/`: Chứa các tệp CSS hoặc styling khác.
+*   `.env`: Tệp chứa biến môi trường (như `DATABASE_URL`).
+*   `next.config.mjs`: Tệp cấu hình cho Next.js.
+*   `package.json`: Định nghĩa các dependencies và scripts của dự án Node.js.
+*   `tailwind.config.ts`: Tệp cấu hình cho Tailwind CSS.
+*   `tsconfig.json`: Tệp cấu hình cho TypeScript.
+*   Các tệp cấu hình khác (`.gitignore`, `postcss.config.mjs`, `components.json`, `pnpm-lock.yaml`).
+
+Đây là một cấu trúc khá điển hình cho một dự án Next.js sử dụng TypeScript và Tailwind CSS

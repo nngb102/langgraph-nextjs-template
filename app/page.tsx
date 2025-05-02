@@ -10,38 +10,80 @@ import { v4 as uuidv4 } from "uuid"
 import { Button } from "@/components/ui/button"
 import { ArrowDown } from "lucide-react"
 
+interface Thread {
+  thread_id: string;
+  title: string;
+  created_at: string;
+  last_accessed_at: string;
+}
+
 export default function Chat() {
   const [threadId, setThreadId] = useState<string | null>(null)
-  const [threadHistory, setThreadHistory] = useState<string[]>([])
+  const [threadHistory, setThreadHistory] = useState<Thread[]>([])
   const [localMessages, setLocalMessages] = useState<Message[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false)
 
-  // Load thread history from localStorage
+  // Load thread history from API
   useEffect(() => {
-    const history = localStorage.getItem("threadHistory")
-    if (history) {
-      setThreadHistory(JSON.parse(history))
+    const fetchThreads = async () => {
+      try {
+        const response = await fetch('/api/threads')
+        const data = await response.json()
+        if (data.threads) {
+          setThreadHistory(data.threads)
+        }
+      } catch (error) {
+        console.error('Error fetching threads:', error)
+      }
     }
+    fetchThreads()
   }, [])
 
-  // Save new thread to history
+  // Update last_accessed_at when thread changes
   useEffect(() => {
-    if (threadId && !threadHistory.includes(threadId)) {
-      const newHistory = [...threadHistory, threadId]
-      setThreadHistory(newHistory)
-      localStorage.setItem("threadHistory", JSON.stringify(newHistory))
+    if (threadId) {
+      fetch(`/api/threads/${threadId}`, {
+        method: 'PUT'
+      }).catch(error => {
+        console.error('Error updating thread access:', error)
+      })
     }
-  }, [threadId, threadHistory])
+  }, [threadId])
 
   const thread = useStream<{ messages: Message[] }>({
     apiUrl: "http://localhost:2024",
     assistantId: "agent",
     messagesKey: "messages",
     threadId: threadId,
-    onThreadId: setThreadId,
+    onThreadId: async (newThreadId) => {
+      setThreadId(newThreadId)
+      // Save new thread to database
+      try {
+        const response = await fetch('/api/threads', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            thread_id: newThreadId,
+            title: 'New Conversation' // You might want to use the first message content as title
+          })
+        })
+        if (!response.ok) throw new Error('Failed to save thread')
+
+        // Refresh thread history
+        const threadsResponse = await fetch('/api/threads')
+        const data = await threadsResponse.json()
+        if (data.threads) {
+          setThreadHistory(data.threads)
+        }
+      } catch (error) {
+        console.error('Error saving new thread:', error)
+      }
+    }
   })
 
   // Reset SCROLL state when thread explicitly becomes null (New Thread button)
@@ -145,14 +187,22 @@ export default function Chat() {
     }
   }
 
-  const handleDeleteThread = (id: string) => {
+  const handleDeleteThread = async (id: string) => {
     if (window.confirm("Delete this conversation? This cannot be undone.")) {
-      const newHistory = threadHistory.filter((t) => t !== id)
-      setThreadHistory(newHistory)
-      localStorage.setItem("threadHistory", JSON.stringify(newHistory))
-      if (threadId === id) {
-        setThreadId(null)
-        setLocalMessages([]) // Explicitly clear local messages here too
+      try {
+        const response = await fetch(`/api/threads/${id}`, {
+          method: 'DELETE'
+        })
+        if (!response.ok) throw new Error('Failed to delete thread')
+
+        // Update local state
+        setThreadHistory(prev => prev.filter(thread => thread.thread_id !== id))
+        if (threadId === id) {
+          setThreadId(null)
+          setLocalMessages([])
+        }
+      } catch (error) {
+        console.error('Error deleting thread:', error)
       }
     }
   }
